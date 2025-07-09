@@ -12,6 +12,7 @@ import {
 } from './store/api/apiSlice'
 import { Bounce, ToastContainer, toast } from 'react-toastify';
 import ConfirmationToast from '@/components/ConfirmationToast';
+import Modal from '@/components/Modal';
 
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -36,8 +37,6 @@ function App() {
     order: sortOrder,
   }
 
-  console.log(editingTodo,">>>")
-
   // RTK Query hooks
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { data: todosData, error, isLoading, refetch } = useGetTodosQuery(queryParams)
@@ -51,14 +50,14 @@ function App() {
     return new Promise((resolve) => {
       // We'll store the toast ID so we can programmatically close it
       let toastId: string | number | null = null;
-  
+
       const closeAndResolve = (result: boolean) => {
         if (toastId !== null) {
           toast.dismiss(toastId); // Dismiss the toast using its ID
         }
         resolve(result); // Resolve the promise with the user's decision
       };
-  
+
       // Render the ConfirmationToast component inside the 'toast' utility
       toastId = toast(<ConfirmationToast
         message="Are you sure you want to proceed?"
@@ -68,10 +67,10 @@ function App() {
 
         // onClose is not directly used here for decision, but can be for other cleanup
         // closeToast is handled by closeAndResolve via toast.dismiss
-        closeToast={() => { } } onClose={function (): void {
+        closeToast={() => { }} onClose={function (): void {
           closeAndResolve(false)
           throw new Error('No response provided by user!.');
-        } }      />, {
+        }} />, {
         autoClose: false,
         closeButton: true,
         draggable: false,
@@ -82,6 +81,22 @@ function App() {
     });
   };
 
+
+  // toast helper 
+
+  const showToast = (message: string | undefined): void => {
+    toast(message, {
+      position: "top-right",
+      autoClose: 5000,
+      hideProgressBar: false,
+      closeOnClick: false,
+      pauseOnHover: true,
+      draggable: true,
+      progress: undefined,
+      theme: "light",
+      transition: Bounce,
+    });
+  }
   // Handle create todo
   const handleCreateTodo = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,6 +104,7 @@ function App() {
 
     try {
       await createTodo(newTodo).unwrap()
+      showToast(`new  todo created title:${newTodo.todo_name}`)
       setNewTodo({ todo_name: '', description: '', completed: false })
     } catch (err) {
       console.error('Failed to create todo:', err)
@@ -98,7 +114,12 @@ function App() {
   // Handle update todo
   const handleUpdateTodo = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingTodo || !editingTodo.todo_name.trim() || !editingTodo.description.trim()) return
+    const prevDescription = todos.find(t => t.id === editingTodo?.id)?.description
+    if (!editingTodo || !editingTodo.todo_name.trim() || !editingTodo.description.trim() || editingTodo.description == prevDescription) {
+      setEditingTodo(null)
+      showToast('No change in todo description!')
+      return
+    }
 
     try {
       await updateTodo({
@@ -107,6 +128,7 @@ function App() {
         description: editingTodo.description,
         completed: false
       }).unwrap()
+      showToast(`${editingTodo.todo_name} is Updated.`)
       setEditingTodo(null)
     } catch (err) {
       console.error('Failed to update todo:', err)
@@ -117,6 +139,8 @@ function App() {
   const handleToggleTodo = async (todo: Todo) => {
     try {
       await toggleTodo({ id: todo.id, completed: !todo.completed }).unwrap()
+      const message = `Todo Status changed to ${todo.completed ? 'undo' : 'completed'}`;
+      showToast(message);
     } catch (err) {
       console.error('Failed to toggle todo:', err)
     }
@@ -128,36 +152,46 @@ function App() {
   const handleDeleteTodo = async (id: number) => {
     const confirmed = await showConfirmationToast();
     if (confirmed) {
+      const todoTitle = todos.find(t => t.id === id)?.todo_name
       try {
         await deleteTodo(id).unwrap()
-      } catch (err:unknown) {
+        showToast(`Todo ${todoTitle} is deleted.`);
+      } catch (err: unknown) {
         const errData = err as RestErr;
         const message = typeof errData.data === 'object' && 'error' in errData.data ? (errData.data as { error?: string }).error : String(errData.data);
-        toast(message, {
-          position: "top-right",
-          autoClose: 5000,
-          hideProgressBar: false,
-          closeOnClick: false,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "light",
-          transition: Bounce,
-          });
+        showToast(message);
         console.error('Failed to delete todo:', err)
       }
     }
   }
 
-  if (isLoading) return <div className="loading">Loading todos...</div>
-  if (error) return <div className="error">Error loading todos!</div>
+  if (isLoading)
+    return (
+      <div className="flex items-center justify-center h-32">
+        <p className="animate-pulse text-blue-600 text-sm font-medium">
+          Loading todos...
+        </p>
+      </div>
+    );
+  if (error)
+    return (
+      <div className="flex flex-col items-center justify-center h-40 text-red-600 text-sm font-medium space-y-2">
+        <img
+          src="https://www.shutterstock.com/image-photo/dangerously-cracked-cable-exposing-electric-wire-1778446907"
+          alt="Cracked wire"
+          className="w-16 h-16 object-contain"
+        />
+        <p>Error loading todos!</p>
+      </div>
+    );
+
 
   const todos = todosData?.todos || []
   const pagination = todosData?.pagination
 
   return (
     <div className="container mx-auto p-4 max-w-4xl">
-      <ToastContainer/>
+      <ToastContainer />
       <h1 className="text-3xl font-bold text-center mb-8">
         Rails Todo App with RTK Query
       </h1>
@@ -228,88 +262,97 @@ function App() {
       </form>
 
       {/* Edit Todo Form */}
-      {editingTodo && (
-        <form onSubmit={handleUpdateTodo} className="card mb-6 border-l-4 border-yellow-500">
-          <h2 className="text-xl font-semibold mb-4">Edit Todo</h2>
-          <div className="space-y-4">
-            <input
-              type="text"
-              value={editingTodo.todo_name}
-              onChange={(e) => setEditingTodo({ ...editingTodo, todo_name: e.target.value })}
-              className="w-full p-2 border rounded"
-              required
-            />
-            <textarea
-              value={editingTodo.description}
-              onChange={(e) => setEditingTodo({ ...editingTodo, description: e.target.value })}
-              className="w-full p-2 border rounded h-24"
-              required
-            />
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={isUpdating}
-                className="btn-primary"
-              >
-                {isUpdating ? 'Updating...' : 'Update Todo'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditingTodo(null)}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-              >
-                Cancel
-              </button>
+      <Modal isOpen={!!editingTodo} onClose={() => setEditingTodo(null)}>
+        {editingTodo && (
+          <form onSubmit={handleUpdateTodo}>
+            <h2 className="text-xl font-semibold mb-4">Edit Todo</h2>
+            <div className="space-y-4">
+              <input
+                type="text"
+                value={editingTodo.todo_name}
+                onChange={(e) => setEditingTodo({ ...editingTodo, todo_name: e.target.value })}
+                className="w-full p-2 border rounded"
+                required
+              />
+              <textarea
+                value={editingTodo.description}
+                onChange={(e) => setEditingTodo({ ...editingTodo, description: e.target.value })}
+                className="w-full p-2 border rounded h-24"
+                required
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="btn-primary"
+                >
+                  {isUpdating ? 'Updating...' : 'Update Todo'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingTodo(null)}
+                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
-          </div>
-        </form>
-      )}
+          </form>
+        )}
+      </Modal>
 
       {/* Todos List */}
       <div className="space-y-4">
-        {todos.map((todo) => (
-          <div key={todo.id} className={`card ${todo.completed ? 'bg-green-50' : 'bg-white'}`}>
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h3 className={`text-lg font-semibold ${todo.completed ? 'line-through text-gray-500' : ''}`}>
-                  {todo.todo_name}
-                </h3>
-                <p className={`text-gray-600 mt-2 ${todo.completed ? 'line-through' : ''}`}>
-                  {todo.description}
-                </p>
-                <div className="text-sm text-gray-400 mt-2">
-                  Created: {new Date(todo.created_at).toLocaleDateString()}
-                  {todo.updated_at !== todo.created_at && (
-                    <span> • Updated: {new Date(todo.updated_at).toLocaleDateString()}</span>
-                  )}
+        {todos.length > 0 ?
+          <div>
+            {todos.map((todo) => (
+              <div key={todo.id} className={`card ${todo.completed ? 'bg-green-50' : 'bg-white'}`}>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className={`text-lg font-semibold ${todo.completed ? 'line-through text-gray-500' : ''}`}>
+                      {todo.todo_name}
+                    </h3>
+                    <p className={`text-gray-600 mt-2 ${todo.completed ? 'line-through' : ''}`}>
+                      {todo.description}
+                    </p>
+                    <div className="text-sm text-gray-400 mt-2">
+                      Created: {new Date(todo.created_at).toLocaleDateString()}
+                      {todo.updated_at !== todo.created_at && (
+                        <span> • Updated: {new Date(todo.updated_at).toLocaleDateString()}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 ml-4">
+                    <button
+                      onClick={() => handleToggleTodo(todo)}
+                      className={`px-3 py-1 rounded text-sm ${todo.completed
+                        ? 'bg-yellow-500 text-white hover:bg-yellow-600'
+                        : 'bg-green-500 text-white hover:bg-green-600'
+                        }`}
+                    >
+                      {todo.completed ? 'Undo' : 'Complete'}
+                    </button>
+                    {!todo.completed && <button
+                      onClick={() => setEditingTodo(todo)}
+                      className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
+                    >
+                      Edit
+                    </button>}
+                    {todo.completed && <button
+                      onClick={() => handleDeleteTodo(todo.id)}
+                      className="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600"
+                    >
+                      Delete
+                    </button>}
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-2 ml-4">
-                <button
-                  onClick={() => handleToggleTodo(todo)}
-                  className={`px-3 py-1 rounded text-sm ${todo.completed
-                      ? 'bg-yellow-500 text-white hover:bg-yellow-600'
-                      : 'bg-green-500 text-white hover:bg-green-600'
-                    }`}
-                >
-                  {todo.completed ? 'Undo' : 'Complete'}
-                </button>
-                <button
-                  onClick={() => setEditingTodo(todo)}
-                  className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDeleteTodo(todo.id)}
-                  className="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
+            ))}
+          </div> :
+          <div className="flex flex-col items-center justify-center h-40 text-red-600 text-sm font-medium space-y-2">
+            <p>No Todo's here!</p>
           </div>
-        ))}
+        }
       </div>
 
       {/* Pagination */}
