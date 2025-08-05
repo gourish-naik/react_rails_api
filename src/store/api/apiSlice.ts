@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-
+import { RootState } from "../store";
 // Define the Todo type based on your Rails API
 export interface Todo {
   id: number;
@@ -42,10 +42,16 @@ export interface UpdateTodoPayload extends Partial<CreateTodoPayload> {
 export const apiSlice = createApi({
   reducerPath: "api",
   baseQuery: fetchBaseQuery({
-    baseUrl: "http://localhost:3001/api/",
-    prepareHeaders: (headers) => {
+    // baseUrl: "http://localhost:3001/api/",
+    baseUrl: "http://192.168.0.155:3001/api/",
+    prepareHeaders: (headers,{getState}) => {
+      const token = (getState() as RootState).auth.token;
+      if(token){
+        headers.set("Authorization", `Bearer ${token}`)
+      } else{
+        headers.set("Content-Type", "application/json");
+      }
       // Add any auth headers if needed
-      headers.set("Content-Type", "application/json");
       // Example: Add auth token if available
       // const token = (getState() as RootState).auth.token
       // if (token) {
@@ -156,11 +162,36 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ["Todo"],
     }),
+
+    loginUser: builder.mutation<{ token: string }, { email: string; password: string }>({
+      query: ({email,password}) => ({
+        url: "login", // adjust this to match your Rails endpoint
+        method: "POST",
+        body: {
+          username: email,
+          password,
+        },
+      }),
+    }),
+
+    registerUser: builder.mutation<{ token: string }, { email: string; password: string }>({
+      query: ({email,password}) => ({
+        url: "users", // adjust as needed
+        method: "POST",
+        body: {
+          username: email,
+          password,
+        },
+      }),
+    }),
+    
   }),
 });
 
 // Export hooks for usage in functional components
 export const {
+  useLoginUserMutation,
+  useRegisterUserMutation,
   useGetTodosQuery,
   useGetAllTodosQuery,
   useGetCompletedTodosQuery,
