@@ -1,5 +1,5 @@
-import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import { RootState } from "../store";
+import { createApi } from "@reduxjs/toolkit/query/react";
+import baseQueryAuth from "./baseQuery";
 // Define the Todo type based on your Rails API
 export interface Todo {
   id: number;
@@ -12,12 +12,23 @@ export interface Todo {
 
 // API response types
 export interface TodosResponse {
-  todos: Todo[];
-  pagination?: {
-    current_page: number;
-    total_pages: number;
-    total_count: number;
+  data: {
+    todos: Todo[];
+    error: Error,
+    sorting_order: 'asc' | 'desc';
+    pagination?: {
+      current_page: number;
+      total_pages: number;
+      total_count: number;
+    };
   };
+}
+
+//error interface
+export interface Error {
+  error:{
+    msg:string,
+  }
 }
 
 // Query parameters
@@ -41,25 +52,7 @@ export interface UpdateTodoPayload extends Partial<CreateTodoPayload> {
 // Define the API slice
 export const apiSlice = createApi({
   reducerPath: "api",
-  baseQuery: fetchBaseQuery({
-    // baseUrl: "http://localhost:3001/api/",
-    baseUrl: "http://192.168.0.155:3001/api/",
-    prepareHeaders: (headers,{getState}) => {
-      const token = (getState() as RootState).auth.token;
-      if(token){
-        headers.set("Authorization", `Bearer ${token}`)
-      } else{
-        headers.set("Content-Type", "application/json");
-      }
-      // Add any auth headers if needed
-      // Example: Add auth token if available
-      // const token = (getState() as RootState).auth.token
-      // if (token) {
-      //   headers.set('Authorization', `Bearer ${token}`)
-      // }
-      return headers;
-    },
-  }),
+  baseQuery: baseQueryAuth,
   tagTypes: ["Todo"],
   endpoints: (builder) => ({
     // Get all todos with optional filters
@@ -121,7 +114,7 @@ export const apiSlice = createApi({
     // Get specific todo by ID
     getTodo: builder.query<Todo, number>({
       query: (id) => `todos/${id}`,
-      providesTags: (result, error, id) => [{ type: "Todo", id }],
+      providesTags: (_result, _error, id) => [{ type: "Todo", id }],
     }),
 
     // Create new todo
@@ -141,7 +134,7 @@ export const apiSlice = createApi({
         method: "PATCH",
         body: patch,
       }),
-      invalidatesTags: (result, error, { id }) => [{ type: "Todo", id }],
+      invalidatesTags: (_result, _error, { id }) => [{ type: "Todo", id }],
     }),
 
     // Toggle todo completion status
@@ -163,8 +156,19 @@ export const apiSlice = createApi({
       invalidatesTags: ["Todo"],
     }),
 
-    loginUser: builder.mutation<{ token: string }, { email: string; password: string }>({
-      query: ({email,password}) => ({
+    loginUser: builder.mutation<
+      {
+        data: {
+          token: string;
+          error: Error;
+          msg: string;
+          refreshToken: string;
+          status: number;
+        };
+      },
+      { email: string; password: string }
+    >({
+      query: ({ email, password }) => ({
         url: "login", // adjust this to match your Rails endpoint
         method: "POST",
         body: {
@@ -174,8 +178,24 @@ export const apiSlice = createApi({
       }),
     }),
 
-    registerUser: builder.mutation<{ token: string }, { email: string; password: string }>({
-      query: ({email,password}) => ({
+    registerUser: builder.mutation<
+      {
+        data: {
+          token: string;
+          rftoken: string;
+          redirectURL: string;
+          msg: string;
+          status: number;
+          error:Error,
+          user: {
+            id: string | number;
+            username: string;
+          };
+        };
+      },
+      { email: string; password: string }
+    >({
+      query: ({ email, password }) => ({
         url: "users", // adjust as needed
         method: "POST",
         body: {
@@ -184,12 +204,26 @@ export const apiSlice = createApi({
         },
       }),
     }),
-    
+
+    logOut: builder.mutation<
+      { data: { msg: string } },
+      { token: string; email: string }
+    >({
+      query: ({ email, token }) => ({
+        url: "logout",
+        method: "POST",
+        body: {
+          username: email,
+          token,
+        },
+      }),
+    }),
   }),
 });
 
 // Export hooks for usage in functional components
 export const {
+  useLogOutMutation,
   useLoginUserMutation,
   useRegisterUserMutation,
   useGetTodosQuery,

@@ -13,6 +13,11 @@ import ConfirmationToast from '@/components/ConfirmationToast';
 import Modal from '@/components/Modal';
 
 import 'react-toastify/dist/ReactToastify.css';
+import { useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import { RootState } from '@/store/store';
+
+
 
 export interface RestErr {
   data?: {
@@ -26,19 +31,27 @@ export default function Todos() {
   // const [PageCount, setPageCount] = useState< 6 >
   const [newTodo, setNewTodo] = useState({ todo_name: '', description: '', completed: false })
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
+  const token = useSelector((state:RootState)=> state.auth.token);
+
 
   // Query parameters based on current filter
   const queryParams: TodosQueryParams = {
     completed: filter === 'all' ? 'all' : filter === 'completed' ? 'true' : 'false',
     page: currentPage,
     order: sortOrder,
+
   }
 
   // RTK Query hooks
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { data: todosData, error, isLoading, refetch } = useGetTodosQuery(queryParams)
+  const { data: todosData, error, isLoading , refetch} = useGetTodosQuery(queryParams)
   const [createTodo, { isLoading: isCreating }] = useCreateTodoMutation()
   const [updateTodo, { isLoading: isUpdating }] = useUpdateTodoMutation()
+
+  useEffect(()=>{
+   refetch()
+  },[token, refetch])
+
   const [toggleTodo] = useToggleTodoMutation()
   const [deleteTodo] = useDeleteTodoMutation()
 
@@ -183,32 +196,32 @@ export default function Todos() {
     );
 
 
-  const todos = todosData?.todos || []
-  const pagination = todosData?.pagination
+  const todos = todosData?.data.todos || []
+  const pagination = todosData?.data.pagination
 
   return (
     <div className="container mx-auto p-4 max-w-4xl">
 
       {/* Filter Controls */}
-      <div className="flex flex-wrap gap-4 mb-6 p-4 bg-gray-100 rounded-lg">
+      <div className="flex flex-wrap gap-4 mb-6 p-4 bg-gray-100 rounded-lg sticky top-0">
         <div className="flex gap-2">
           <button
             onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded ${filter === 'all' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700'
+            className={`px-4 py-2 rounded cursor-pointer ${filter === 'all' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700'
               }`}
           >
             All
           </button>
           <button
             onClick={() => setFilter('incomplete')}
-            className={`px-4 py-2 rounded ${filter === 'incomplete' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700'
+            className={`px-4 py-2 rounded cursor-pointer ${filter === 'incomplete' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700'
               }`}
           >
             Incomplete
           </button>
           <button
             onClick={() => setFilter('completed')}
-            className={`px-4 py-2 rounded ${filter === 'completed' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700'
+            className={`px-4 py-2 rounded cursor-pointer ${filter === 'completed' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700'
               }`}
           >
             Completed
@@ -218,7 +231,7 @@ export default function Todos() {
         <select
           value={sortOrder}
           onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-          className="px-4 py-2 rounded border"
+          className="px-4 py-2 rounded border cursor-pointer"
         >
           <option value="desc">Newest First</option>
           <option value="asc">Oldest First</option>
